@@ -1,0 +1,1155 @@
+# Exploratory Data Analysis - White Wine
+#### Italo Oliveira
+
+### O porquê deste Projeto
+Exploratory Data Analysis (EDA) é uma análise numérica e gráfica das variáveis e suas correlações em  um conjunto de dados. É um passo crucial dentro do processo da Ciência de Dados, pois nos fornece insights e interpretações das informações facilitando as possíveis análises estatísticas futuras mais formais e rigorosas, e a criação dos modelos preditivos.
+
+Este projeto tem como objetivo praticar e formalizar o que foi aprendido durante o Nanodegree Data Scientist da Udacity.
+
+### Sobre o Conjunto de Dados
+O conjunto de dados armazena 4.898 observações de Vinhos Brancos produzidos na região portuguesa de Vinho Verde. 
+Há 12 variáveis. Dentre elas, 11 revelam atributos fisico-químicos e última é referente à qualidade do vinho.
+Informações como tipos de uva, marca do vinho, preço de venda do vinho, etc. não estão disponíveis por questões de privacidade e logísticas.
+As classes não estão balanceadas. Existem muito mais vinhos de qualidade mediana que vinhos excelentes ou ruins.
+Abaixo, há uma breve descrição de cada atributo:
+- **fixed acidity** (acidez fixa) - concentração da maioria dos ácidos involvidos no vinho, sejam fixos ou não-voláteis.
+- **volatile acidity** (acidez volátil) - concentração de ácido acético no vinho, o qual em níveis muito altos podem conduzir a um sabor desagradável de vinagre.
+- **residal sugar** (açúcar residual) - concentração de açúcar remanescente após o término da fermentação.
+- **chlorides** (cloretos) - concentração de sal no vinho.
+- **free sulfur dioxide** (dióxido de enxofre livre) - concentração de dióxido de enxofre (SO2) na forma livre existente em equilíbrio entre o SO2 molecular, como um gás dissolvido, e o íon bissulfato. Previne o crescimento de microorganismos e a oxidação do vinho. Em baixas concentrações, SO2 é quase indetectável no vinho. Mas, em sua forma livre, concentrações acima de 50 ppm o enxofre torna-se evidente ao olfato e ao paladar.
+- **total sulfur dioxide** (dióxido de enxofre total) - concentração de SO2 na forma livre e combinado. 
+- **density** (densidade)
+- **pH**
+- **sulphates** (sulfatos) - concentração do aditivo que pode contribuir com os níveis de SO2.
+- **alcohol** (álcool) - teor alcoólico do vinho.
+- **quality** (qualidade) - qualidade do vinho. A qualidade varia de 0 a 10.
+
+Este conjunto de dados está disponível publicamente para pesquisas.
+
+**Disponível em:**
+- [@Elsevier] http://dx.doi.org/10.1016/j.dss.2009.05.016
+- [Pre-press (pdf)] http://www3.dsi.uminho.pt/pcortez/winequality09.pdf
+- [bib] http://www3.dsi.uminho.pt/pcortez/dss09.bib
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+library(ggplot2)
+library(knitr)
+library(dplyr)
+library(gridExtra)
+library(GGally)
+```
+
+
+```{r echo=FALSE, Load_the_Data}
+df <- read.csv("wine_dataset/wineQualityWhites.csv")
+```
+
+### Sumarizando as Estatísticas
+
+Dimensões:
+
+```{r echo=FALSE}
+dim(df)
+```
+
+Estrutura:
+
+```{r echo=FALSE}
+str(df)
+```
+
+A variável X representa o índice de cada observação e não é necessária no R, por isso iremos removê-la.
+
+```{r echo=FALSE}
+df <- subset(df, select = -c(X))
+```
+
+```{r echo=FALSE}
+sapply(df, summary)
+```
+
+Nosso dataset consiste de apenas variáveis quantitativas. Para a aprovação do projeto, precisamos de pelo menos uma variável categórica, portanto, a medida que formos explorando o conjunto de dados, criaremos, pelo menos, uma variável categórica.
+
+```{r echo=FALSE}
+df$quality.factor <- ifelse(df$quality == 6, "Average",
+                            ifelse(df$quality > 6, "Above Average", "Below Average"))
+df$quality.factor <- factor(df$quality.factor, levels = c("Below Average", "Average", "Above Average"))
+
+df$sweetness <- with(df, cut(residual.sugar, include.lowest = TRUE, 
+                             c(0, 4, 25, 1000),
+                             labels = c("Dry", "Off-Dry", "Sweet")))
+
+df$alcohol.factor <- with(df, cut(alcohol, include.lowest = TRUE, right = FALSE,
+                                  c(8, 9.5, 11.6, 15)))
+
+df$bound.sulfur.dioxide <- df$total.sulfur.dioxide - df$free.sulfur.dioxide
+```
+
+```{r echo=FALSE}
+df <- df[, c(names(df)[1:6], "bound.sulfur.dioxide", names(df)[7:11], "alcohol.factor", names(df)[12:14])]
+```
+
+### Plots de uma Única Variável
+
+#### Quality
+
+```{r echo=FALSE}
+ggplot(aes(x = quality),
+       data = df) + 
+  geom_histogram(binwidth = .1) +
+  scale_x_continuous(breaks = seq(3, 9, 1))
+```
+
+A maioria dos vinhos avaliados receberam nota 5 ou 6. Trata-se de uma distribuição normal com pico em 6, limite inferior em 3 e superior em 9. 
+
+Acredito que seja interessante criar uma variável do tipo categorical que admite 3 fatores: Average (qualidade = 6), Above Average (qualidade > 6) e Below Average (qualidade < 6)
+
+```{r echo=FALSE}
+ggplot(aes(x = quality.factor),
+       data = df) + 
+  geom_histogram(stat = "count")
+```
+
+#### Alcohol
+
+```{r echo=FALSE}
+ggplot(aes(x = alcohol),
+       data = df) + 
+  geom_histogram(binwidth = .2) +
+  scale_x_continuous(breaks = seq(5, 15, 1))
+```
+
+A distribuição da concentração de álcool dos vinhos demonstra que há uma maior quantidade de vinhos com menores concentrações de álcool. Os níveis de álcool variam dentro do intervalo de [8, 14.2] %.
+O pico é atingido em cerca de 9.5 %.
+
+Como será a distribuição por qualidade do vinho?
+
+```{r echo=FALSE}
+ggplot(aes(x = alcohol),
+       data = df) + 
+  geom_histogram(binwidth = .2) +
+  scale_x_continuous(breaks = seq(5, 15, 1)) +
+  facet_grid(~quality.factor)
+```
+
+Em vinhos de qualidade abaixo da média, a distribuição é enviesada à direita com um pico bem acentuado na concentração de ~9.5 %, são poucos os vinhos com concentrações acima de 11 %.
+
+Em vinhos de qualidade média, o enviesamento diminui. Há uma certa distribuição bimodal em que o vale se encontra em mais ou menos 11.5 %. 
+
+Em vinhos acima da média, há uma certa trimodalidade na distribuição. Desses vinhos acima da média, vale a pena conferir a distribuição por cada nível de qualidade separadamente
+
+```{r echo=FALSE}
+ggplot(aes(x = alcohol),
+       data = subset(df, quality.factor == "Above Average")) + 
+  geom_histogram(binwidth = .3) +
+  geom_vline(xintercept = 11.5, color = "orange") +
+  scale_x_continuous(breaks = seq(5, 15, 1)) +
+  facet_grid(~quality)
+```
+
+Parece que, conforme a qualidade aumenta, o teor alcoólico se inclina para concentrações mais altas. Pode-se dizer que vinhos de qualidade maior costumam ter teor alcoólico mais altos, acima de 11 %.
+
+Decidi criar uma nova variável do tipo categorical que cortará os seguintes valores: 9.5, 11.6; criando os intervalos: [8, 9.5), [9.5, 11.6), [11.6, 15].
+
+```{r echo=FALSE}
+ggplot(aes(x = alcohol.factor),
+       data = df) + 
+  geom_histogram(stat = "count")
+```
+
+#### Fixed Acidity
+
+```{r echo=FALSE}
+ggplot(aes(x = fixed.acidity),
+       data = df) + 
+  geom_histogram(binwidth = .075) +
+  scale_x_continuous(breaks = seq(3, 15, 1))
+```
+
+A distribuição da concentração acidez fixa é normal e varia no intervalo de [3.8, 14.2] g/dm^3, sendo que a maioria das concentrações são inferiores a 10 g/dm^3. O pico se encontra entre 6.5 ~ 7.0 g/dm^3. A mediana é 6.8 g/dm^3 e a média, aproximadamente, 6.8548 g/dm^3.
+
+Existem gaps na distribuição, isso pode ser entendido pois esse atributo varia até uma casa decimal, e a largura das bins de nossa distribuição é de 0.075.
+
+```{r echo=FALSE}
+ggplot(aes(x = fixed.acidity),
+       data = df) + 
+  geom_histogram(binwidth = .1) +
+  geom_vline(xintercept = c(5.5, 6.5, 7.5), color = "orange", alpha = .7) +
+  scale_x_continuous(breaks = seq(3, 15, 1)) +
+  coord_cartesian(xlim = c(4, 10)) +
+  facet_grid(~quality.factor) 
+```
+
+Para vinhos de qualidade inferior, a distribuição apresenta um ligeiro viés à direita. Conforme a qualidade dos vinhos aumenta, esse viés passa para a esquerda.
+
+#### Volatile Acidity
+
+```{r echo=FALSE}
+ggplot(aes(x = volatile.acidity),
+       data = df) + 
+  geom_histogram(binwidth = .0075) +
+  scale_x_continuous(breaks = seq(0, 1.5, .1))
+```
+
+A distribuição é semelhante a da acidez fixa, entretanto, essa apresenta uma cauda para a direita mais longa. Além disso, a variação deste tipo de acidez é de até duas casas decimais.
+
+O atributo varia no intervalo de [0.08, 1.10] g/dm^3.
+A mediana é 0.26 g/dm^3 e a média é 0.2782 g/dm^3.
+
+```{r echo=FALSE}
+ggplot(aes(x = volatile.acidity),
+       data = df) + 
+  geom_histogram(binwidth = .01) + 
+  geom_vline(xintercept = .3, color = "orange", alpha = .7) +
+  facet_grid(~quality.factor) +
+  scale_x_continuous(breaks = seq(0, 1.5, .2))
+```
+
+Conforme a qualidade do vinho aumenta, nota-se uma diminuição na moda da acidez volátil.
+
+#### Citric Acid
+
+```{r echo=FALSE}
+ggplot(aes(x = citric.acid),
+       data = df) +
+  geom_histogram(binwidth = .01) +
+  scale_x_continuous(breaks = seq(0, 2, .1))
+```
+
+A distribuição do ácido cítrico é normal e varia no intervalo de [0.00, 1.66] g/dm^3. O que me provoca certa estranheza são os picos localizados em 0.49 e 0.74 g/dm^3.
+
+A variação ocorre em até 2 casas decimais.
+A mediana está aos 0.32 g/dm^3 e a média aos 0.33419 g/dm^3.
+
+```{r echo=FALSE}
+ggplot(aes(x = citric.acid),
+       data = df) +
+  geom_histogram(binwidth = .01) +
+  geom_vline(xintercept = c(.2, .3, .5), color = "orange", alpha = .7) +
+  scale_x_continuous(breaks = seq(0, 2, .2)) +
+  facet_grid(~quality.factor) +
+  coord_cartesian(xlim = c(0, .8))
+```
+
+Conforme a qualidade do vinho aumenta, nota-se que o desvio padrão da distribuição diminui.
+
+#### Residual Sugar
+
+```{r echo=FALSE}
+ggplot(aes(x = residual.sugar),
+       data = df) +
+  geom_histogram(bins = 100)
+```
+A distribuição remete a um enviesamento à direita.
+Para entender melhor essa distribuição nos valores mais baixos, aplicaremos uma transformação logarítimica no eixo X.
+
+```{r echo=FALSE}
+ggplot(aes(x = residual.sugar),
+       data = df) +
+  geom_histogram(bins = 40) +
+  geom_vline(xintercept = c(4, 25), color = "orange") +
+  scale_x_log10() 
+```
+
+Após a transformação, percebe-se uma distribuição bimodal. 
+Os vinhos também são classificados quanto à doçura. Portanto, essa bimodalidade denota a existência de, principalmente, dois tipos de vinho: Aqueles com até 4 g/dm^3 de açúcar residual e aqueles entre 4 e 25 g/dm^3 de açúcar.
+
+O distribuição varia no intervalo de [0.6, 65.8] g/dm^3, apesar de que a maioria dos vinhos se encontra até 25 g/dm^3.
+
+Criaremos uma novo atributo (sweetness) que representa a classificação do nível quanto à doçura.
+Vinhos Dry: residual.sugar <= 4.00
+Vinhos Off-Dry: 4.0 < residual.sugar <= 25.00
+Vinhos Sweet: residual.sugar > 25.00
+
+#### Sweetness
+
+```{r echo=FALSE}
+ggplot(aes(x = sweetness),
+       data = df) + 
+  geom_histogram(stat = "count")
+```
+
+A maioria dos vinhos do dataset é do tipo semisseco, seguido do seco. Há uma diminuta parcela de vinhos doces.
+
+#### Chlorides
+
+```{r echo=FALSE}
+ggplot(aes(x = chlorides),
+       data = df) +
+  geom_histogram(binwidth = .002)
+```
+
+A distribuição de cloretos se assemelha à normal, entretando há uma longa cauda de outliers.
+Varia no intervalo de [0.009, 0.346] g/dm^3, possui mediana e média de, respectivamente, 0.043 e 0.04577 g/dm^3.
+
+```{r echo=FALSE}
+ggplot(aes(x = chlorides),
+       data = df) +
+  geom_histogram(binwidth = .002) +
+  facet_grid(~quality.factor) +
+  coord_cartesian(ylim = c(0.0, 10))
+```
+
+```{r echo=FALSE}
+ggplot(aes(x = chlorides),
+       data = df) +
+  geom_histogram(binwidth = .002) +
+  geom_vline(xintercept = .05, color = "orange", alpha = .7) +
+  facet_grid(~quality.factor) +
+  coord_cartesian(xlim = c(0.0, .1))
+```
+
+A maioria dos outliers se encontram em vinhos de qualidade inferior.
+
+Conforme a qualidade do vinho aumenta, nota-se que o pico da distribuição se assenta em concentrações inferiores.
+
+Como a concentração de sal se relaciona com a concentração de açúcar?
+
+#### pH
+
+```{r echo=FALSE}
+ggplot(aes(x = pH),
+       data = df) +
+  geom_histogram(binwidth = 0.01)
+```
+
+O pH dos vinhos varia no intervalo de [2.72, 3.82].
+O pico está localizado em, aproximadamente, 3.15.
+A mediana e média são, respectivamente, 3.18 e 3.188267.
+
+```{r echo=FALSE}
+ggplot(aes(x = pH),
+       data = df) +
+  geom_histogram(binwidth = .03) +
+  geom_vline(xintercept = c(3.15), color = "orange", alpha = .7) +
+  facet_grid(~quality.factor)
+```
+
+Conforme a qualidade do vinho aumento, nota-se um aumento no desvio padrão da distribuição. Ou seja, em vinhos de qualidade inferior, o pH dos vinhos não se distancia com muita frequência do valor da moda (~3.15).
+
+#### Density
+
+```{r echo=FALSE}
+ggplot(aes(x = density),
+       data = df) +
+  geom_histogram(binwidth = .0005)
+```
+
+```{r echo=FALSE}
+ggplot(aes(x = density),
+       data = df) +
+  geom_histogram(binwidth = .0003) +
+  coord_cartesian(xlim = c(0.985, 1.005))
+```
+
+A distribuição da densidade dos vinhos se assemelha à normal, apesar de conter certas características que não permitem classificar essa distribuição como normal.
+
+A variação ocorre no intervalo de [0.98711, 1.03898] g/cm^3.
+Mediana e média de, respectivamente, 0.99374 e 0.9940274 g/cm^3.
+
+```{r echo=FALSE}
+ggplot(aes(x = density),
+       data = df) +
+  geom_histogram(binwidth = .0005) +
+  facet_grid(~quality.factor) +
+  coord_cartesian(xlim = c(0.985, 1.005))
+```
+
+Vinhos de qualidade superior costumam possuir densidades relativamente menores. 
+
+Vinhos de qualidade superior possuem mais dissolvidos densos e/ou mais solventes menos densos?
+
+Há, de certa forma, uma distribuição bimodal nos vinhos de qualidade acima da média. Vamos analisar a densidade desses vinhos por qualidade.
+
+```{r echo=FALSE}
+ggplot(aes(x = density),
+       data = subset(df, quality.factor == "Above Average")) +
+  geom_histogram(binwidth = .0005) +
+  facet_grid(~quality)
+```
+
+Essa bimodelidade está presente em todos os níveis de qualidade acima de 6.
+
+#### Free Sulfur Dioxide
+
+```{r echo=FALSE}
+ggplot(aes(x = free.sulfur.dioxide),
+       data = df) +
+  geom_histogram(binwidth = 2)
+```
+
+A concentração de SO2 livre apresenta uma distribuição normal com alguns outliers.
+A variação ocorre no intervalo [2, 289] mg/dm^3.
+
+A mediana e média ocorrem, respectivamente, em 34 e 35.31 mg/dm^3.
+
+```{r echo=FALSE}
+ggplot(aes(x = free.sulfur.dioxide),
+       data = df) +
+  geom_histogram(binwidth = 2) +
+  facet_grid(~quality.factor) +
+  coord_cartesian(ylim = c(0, 5))
+```
+
+Os outliers de maior valor se encontro em vinhos de qualidade abaixo da média.
+
+```{r echo=FALSE}
+ggplot(aes(x = free.sulfur.dioxide),
+       data = df) +
+  geom_histogram(binwidth = 2) + 
+  geom_vline(xintercept = 40, color = "orange", alpha = .7) +
+  facet_grid(~quality.factor) +
+  coord_cartesian(xlim = c(0, 125))
+```
+
+Com uma concentração acima de 50 mg/dm^3, o SO2 é perceptível ao olfato e paladar. O SO2, por conter Enxofre, possui um odor forte, portanto, como existem vinhos de qualidade acima da média com concentrações superiores a 50?
+
+Conforme a qualidade do vinho aumenta, nota-se uma diminuição no desvio padrão da distribuição e na concentração da moda.
+
+#### Total Sulfur Dioxide
+
+```{r echo=FALSE}
+ggplot(aes(x = total.sulfur.dioxide),
+       data = df) +
+  geom_histogram(binwidth = 2)
+```
+
+Assim como a distribuição de SO2 livre, a distribuição de SO2 total é normal com alguns outliers. Varia no intervalo de [9, 440] mg/dm^3. Mediana de 134 mg/dm^3 e média de 138.4 mg/dm^3.
+
+```{r echo=FALSE}
+ggplot(aes(x = total.sulfur.dioxide),
+       data = df) +
+  geom_histogram(binwidth = 4) +
+  geom_vline(xintercept = 150, color = "orange", alpha = .7) +
+  facet_grid(~quality.factor)
+```
+
+Conforme a qualidade do vinho aumenta, nota-se que a distribuição possui massas maiores em concentrações mais baixas de SO2, além de possuírem menor desvio padrão.
+
+SO2 total é a soma de SO2 livre e SO2 combinado. Nosso dataset apresenta apenas os valores do SO2 total e livre, portanto, criaremos a variável de SO2 combinado (bound.sulfur.dioxide).
+
+#### Bound Sulfur Dioxide
+
+```{r echo=FALSE}
+summary(df$bound.sulfur.dioxide)
+
+ggplot(aes(x = bound.sulfur.dioxide),
+       data = df) +
+  geom_histogram(binwidth = 2)
+```
+
+Dessa vez, percebemos um singelo enviesamento para a direita. A variação ocorre no intervalo de [4, 331] mg/dm^3, com mediana e média de, respectivamente, 100 e 103.1 mg/dm^3.
+
+```{r echo=FALSE}
+ggplot(aes(x = bound.sulfur.dioxide),
+       data = df) +
+  geom_histogram(binwidth = 4) +
+  geom_vline(xintercept = 100, color = "orange") +
+  facet_grid(~quality.factor)
+```
+
+Conforme a qualidade aumenta, mais enviesada para a direita a distribuição se torna e menor o desvio padrão.
+
+#### Sulphates
+
+```{r echo=FALSE}
+ggplot(aes(x = sulphates),
+       data = df) +
+  geom_histogram(binwidth = .01)
+```
+
+A distribuição da concentração de sulfatos é próxima à normal, entretanto, há uma certa cauda à direita.
+
+A variação ocorre no intervalo de [0.22, 1.08] g/dm^3.
+A mediana é de 0.47 e a média 0.48984 g/dm^3.
+
+```{r echo=FALSE}
+ggplot(aes(x = sulphates),
+       data = df) +
+  geom_histogram(binwidth = .02) +
+  geom_vline(xintercept = .5, color = "orange", alpha = .7) +
+  facet_grid(~quality.factor)
+```
+
+Conforme a qualidade aumenta, o enviesamento à direita tende a aumentar e o pico tende a se estabelecer em valores menores.
+
+### Análise de uma Única Variável
+
+#### Estrutura do Dataset
+Originalmente, o conjunto de dados continha 4.898 amostras, cada qual com 11 variáveis quantitativas e contínuas e a variável categórica `Qualidade`, cujos intervalos são apresentados a seguir:
+
+| Variável | [ | ] | Medida
+|--|--|--|--|
+| Fixed Acidity | 3.8 | 14.2 | g/dm^3
+| Volatile Acidity | 0.08 | 1.1 | g/dm^3 |
+| Citric Acid | 0 | 1.66 | g/dm^3 |
+| Residual Sugar| 0.6 | 65.8 | g/dm^3 |
+| Chlorides | 0.009 | 0.346 | g/dm^3 |
+| Free Sulfur Dioxide | 0.002 | 0.289 | mg/dm^3 |
+| Total Sulfur Dioxide | 0.009 | 0.440 | mg/dm^3 |
+| Density | 0.98711 | 1.03898 | g/cm^3 |
+| pH | 2.72 | 3.82 | - |
+| Sulphates | 0.22 | 1.08 | g/dm^3 |
+| Alcohol | 8 | 14.2 | % |
+| **Quality** | 3 | 9 | - |
+
+A maioria das variáveis possui distribuição normal, ou semelhante a normal com certa cauda à direita.
+
+A variável Residual Sugar possui o maior enviesamento à direita e, a partir dela, foi criada a variável `sweetness` que atribui a cada vinho uma classificação quanto a sua doçura conforme a seguinte tabela:
+
+| Valor | Significado |
+|--|--|
+| Dry | residual.sugar <= 4 |
+| Off-Dry | 4 < residual.sugar <= 25  |
+| Sweet | residual.sugar > 25 |
+
+Além dessa variável, criei outras três: 
+- `quality.factor`:
+
+| Valor | Significado |
+|--|--|
+| Below Average| quality < 6 |
+| Average | quality == 6  |
+| Above Average| quality > 6 |
+
+- `alcohol.factor`:
+
+| Valor | Significado |
+|--|--|
+| [8,9.5] | 8 <= alcohol <= 9.5 |
+| (9.5,11.5]| 9.5 < alcohol <= 11.5 |
+| (11.5,15]| 11.5 < alcohol <= 15 |
+
+- `bound.sulfur.dioxide`: variável quantitativa e contínua, cujo valor é a diferença entre total.sulfur.dioxide e free.sulfur.dioxide.
+
+| Variável | [ | ] | Medida
+|--|--|--|--|
+| Bound Sulfur Dioxide | 4 | 331 | mg/dm^3
+
+Ao final desta seção, o conjunto de dados se encontra da seguinte forma:
+
+| Tipo de variável | Quantidade |
+|--|--|
+| Contínua | 12 |
+| Categórica | 3 |
+| Output | 1 |
+| **Total** | 16 |
+
+#### 2. Variável de Interesse
+Nossa variável de interesse é `quality`. É este atributo que desejamos predizer ao criar modelos preditivos. 
+Por ora, acredito que os atributos que terão melhor desempenho para estimar a qualidade do vinho são `alcohol` e `density`. 
+Levando em consideração que a densidade de uma solução depende de seus solventes e seus solutos, podemos descobrir quais substâncias mais se relacionam com o atributo densidade.
+
+#### 3. Transformações e Distribuições Incomuns
+Conforme dito acima, a variável `residual.sugar` possuía alto enviesamento à direita. Para entender melhor sua distribuição, foi usada a transformação logarítimica, a qual nos permitiu perceber uma certa bimodalidade na distribuição transformada, que, por sua vez, trouxe o insight das classificações do vinho por doçura. 
+A variável `citric.acid` colunas com discrepância de altura nos valores 0.49 e 0.74. Não foi realizado nenhum tipo de transformação.
+
+
+### Plots de Duas Variáveis
+
+```{r echo=FALSE, Bivariate_Plots}
+micro_df <- subset(df, select = -c(quality, alcohol.factor, sweetness))
+
+ggp <- ggpairs(micro_df, axisLabels = "internal",
+               lower = list(continuous = wrap("points", color = "blue", alpha = 1/40),
+                            combo = wrap("box", color = "orange", alpha = .3),
+                            discrete = wrap("facetbar", color = "yellow", alpha = .3)),
+               diag = list(continuous = wrap("densityDiag", color = "blue", alpha = .5)))
+
+print(ggp, progress = FALSE)
+
+rm(micro_df, ggp)
+```
+
+A partir desta matriz de scatterplots, selecionamos as variáveis cujas correlações são iguais ou superiores a 0.30, independente da direção:
+
+Correlações de força superior a 0.3, sem considerar a direção:
+| # | Var 1 | Var 2 | Coeficiente |
+|--|--|--|--|
+| 1 | fixed.acidity | pH | -0.426 |
+| 2 | residual.sugar | bound.sulfur.dioxide | 0.345 |
+| 3 | residual.sugar | total.sulfur.dioxide | 0.401 |
+| 4 | residual.sugar | density | **0.839** |
+| 5 | residual.sugar | alcohol| -0.451 |
+| 6 | chlorides | alcohol| -0.36 |
+| 7 | free.sulfur.dioxide | total.sulfur.dioxide| 0.616 |
+| 8 | bound.sulfur.dioxide | total.sulfur.dioxide| **0.922** |
+| 9 | bound.sulfur.dioxide | density| 0.504 |
+| 10 | bound.sulfur.dioxide | alcohol| -0.427 |
+| 11 | total.sulfur.dioxide | density| 0.53 |
+| 12 | total.sulfur.dioxide | alcohol| -0.449 |
+| 13 | density | alcohol | **-0.78** |
+*Em **negrito**: valores absolutos acima de 0.70*
+
+Correlações que fazem sentido imediato na tabela:
+
+- **Correlação #1**: Aumentar a concentração de ácidos em uma solução diminui o pH dessa solução, pois quanto maior a acidez, menor o pH.
+- **Correlação #4**: Se aumenta a quantidade de açúcar em uma solução, maior a densidade dessa solução, pois a densidade do açúcar é maior que a dos solventes.
+- **Correlação #7**: SO2 livre está contido em SO2 total.
+- **Correlação #8**: SO2 combinado está contido em SO2 total.
+- **Correlação #13**: O álcool tem densidade baixa, portanto se sua concentração aumenta, é natural que a densidade diminua.
+
+Nos cálculos dessas correlações, utilizamos o método de Pearson, o qual avalia a realação entre duas variáveis contínuas.
+
+Como a variável `quality` é discreta, utilizaremos, abaixo, o método de Spearman para calcular sua correlação com as demais variáveis.
+
+```{r, echo= FALSE}
+cor(subset(df, select = -c(quality.factor, alcohol.factor, sweetness)),
+    method = 'spearman')[, "quality"]
+```
+
+Nesta tabela, ordenaremos todos os coeficientes de maneira decrescente, ignorando a direção.
+
+| # | Var 1 | Var 2 | Coeficiente |
+|--|--|--|--|
+| 14 | alcohol | quality | 0.440 |
+| 15 | density | quality | -0.348 |
+| 16 | chlorides | quality | -0.314 |
+| 17 | bound.sulfur.dioxide | quality | -0.245 |
+| 18 | total.sulfur.dioxide | quality | -0.197 |
+| 19 | volatile.acidity | quality | -0.196 |
+| 20 | pH | quality | 0.109 |
+| 21 | fixed.acidity | quality | -0.084 |
+| 22 | residual.sugar | quality | -0.082 |
+| 23 | sulphates | quality | 0.033 |
+| 24 | free.sulfur.dioxide | quality | 	0.023 |
+| 25 | citric.acid | quality | 0.018 |
+
+
+#### Alcohol x Quality
+
+```{r echo=FALSE}
+ggplot(aes(x = factor(quality), y = alcohol),
+       data = df) +
+  geom_jitter(color = "orange", width = 0.4, height = .1, alpha = .7) +
+  geom_boxplot(alpha = .7) +
+  stat_summary(fun.y = mean, geom = "point", shape = 4, color = "blue", size = 3)
+```
+
+Até este ponto, verificamos que o teor alcoólico é maior em vinhos de qualidade superior. Entretanto, nota-se que o teor alcoólico não é ascendente sempre.
+
+Nos níveis de qualidade 3, 4 e 5, o teor alcoólico decresce e só torna a subir a partir da média.
+
+Pode ser que essa característica seja devido a baixa quantidade de amostras para vinhos de qualidades mais extremas.
+
+```{r echo=FALSE}
+ggplot(aes(x = quality.factor, y = alcohol),
+       data = df) +
+  geom_jitter(color = "orange", width = 0.4, height = .1, alpha = .7) +
+  geom_boxplot(alpha = .7) +
+  stat_summary(fun.y = mean, geom = "point", shape = 4, color = "blue", size = 3)
+```
+
+No geral, o teor alcoólico aumenta conforme a qualidade dos vinhos aumenta.
+
+```{r echo=FALSE}
+ggplot(aes(x = factor(quality), y = alcohol),
+       data = df) +
+  geom_jitter(alpha = 1/5, color = "orange", height = .1, width = .3) +
+  geom_boxplot(alpha = 1/4)
+```
+
+Há, com certeza, uma relação entre o álcool e a qualidade do vinho, vinhos melhor avaliados tendem a possuir teor alcoólico mais elevado.
+
+Além disso, o teor alcoólico próximo a 9,5% é muito mais frequente em vinhos de qualidade 6 ou inferior do que vinhos com qualidade acima de 6.
+
+#### Alcohol x Density
+
+```{r echo=FALSE}
+ggplot(aes(x = alcohol, y = density),
+       data = df) +
+  geom_jitter(alpha = 1/10, color = "black", width = .1, height = .001)
+```
+
+Dando um zoom para ignorar o 99º percentil
+
+```{r echo=FALSE}
+ggplot(aes(x = alcohol, y = density),
+       data = subset(df, density < quantile(df$density, probs = .99))) +
+  geom_jitter(alpha = 1/10, width = .1, height = .001) +
+  geom_smooth()
+```
+
+Como a densidade do álcool é menor, é natural que o aumento do teor alcoólico acarrete na diminuição da densidade uma vez que a densidade do álcool é relativamente baixa.
+
+#### Quality x Density
+
+```{r echo=FALSE}
+ggplot(aes(x = factor(quality), y = density),
+       data = df) +
+  geom_jitter(color = "orange", alpha = 1/10) +
+  geom_boxplot(alpha = .7)
+```
+
+Dando um zoom para ignorar o 99º percentil
+
+```{r echo=FALSE}
+ggplot(aes(x = factor(quality), y = density),
+       data = subset(df, density < quantile(df$density, probs = .99))) +
+  geom_jitter(color = "orange", alpha = .3) +
+  geom_boxplot(alpha = .3)
+```
+ 
+Aqui, como no plot `alcohol` x `density`, noto uma incongruência nos níveis de qualidade 3, 4 e 5.
+
+No geral, conforme se diminui a densidade de um vinho, maior sua qualidade.
+
+Vinhos com maior concentração de açúcar e outras substâncias dissolvidas têm sua densidade superior. 
+
+
+#### Residual Sugar x Quality
+
+###### Vinhos Semissecos
+
+```{r echo=FALSE}
+ggplot(aes(x = factor(quality), y = residual.sugar),
+       data = subset(df, sweetness == "Off-Dry")) +
+  geom_jitter(alpha = 1/4, width = 0.25, height = .1)
+```
+
+```{r echo=FALSE}
+ggplot(aes(x = quality.factor, y = residual.sugar),
+       data = subset(df, sweetness == "Off-Dry")) +
+  geom_jitter(alpha = 1/4, color = "orange", width = 0.25, height = .1) +
+  geom_boxplot(alpha = 1/4) +
+  stat_summary(fun.y = mean, geom = "point", shape = 4, color = "blue", size = 3)
+```
+
+###### Vinhos Secos
+
+```{r echo=FALSE}
+ggplot(aes(x = factor(quality), y = residual.sugar),
+       data = subset(df, sweetness == "Dry")) +
+  geom_jitter(alpha = 1/4, width = 0.25, height = .1)
+```
+
+```{r echo=FALSE}
+ggplot(aes(x = quality.factor, y = residual.sugar),
+       data = subset(df, sweetness == "Dry")) +
+  geom_jitter(alpha = 1/4, color = "orange", width = 0.25, height = .1) +
+  geom_boxplot(alpha = 1/4) +
+  stat_summary(fun.y = mean, geom = "point", shape = 4, color = "blue", size = 3)
+```
+
+Para vinhos secos, a média de açúcar nos vinhos cresce junto com a qualidade. Enquanto, para vinhos semissecos, a média de açúcar nos vinhos decresce com o aumento da qualidade.
+Talvez, os critérios da qualidade do vinho varie entre as classificações do vinho quanto à doçura. 
+
+#### Alcohol x Residual Sugar
+
+###### Vinhos Secos
+
+```{r echo=FALSE}
+ggplot(aes(x = residual.sugar, y = alcohol),
+       data = subset(df, sweetness == "Dry")) +
+  geom_jitter(alpha = 1/4, width = 0.1, height = 0.1)
+```
+
+###### Vinhos Semissecos
+
+```{r echo=FALSE}
+ggplot(aes(x = residual.sugar, y = alcohol),
+       data = subset(df, sweetness == "Off-Dry")) +
+  geom_jitter(alpha = 1/5, width = 0.1, height = 0.1)
+```
+
+Falando sobre vinhos semissecos, percebo que, com o aumento de açúcar nos vinhos, o teor alcoólico dos vinhos de maior concentração de álcool tende a decrescer.
+Já nos vinhos secos, não vejo uma relação entre álcool e açúcar.
+
+Como será que estes dois gráficos ficam quando adicionamos a variável quality?
+
+#### Quality x Chlorides
+
+```{r echo=FALSE}
+ggplot(aes(x = factor(quality), y = chlorides),
+       data = df) +
+  geom_jitter(alpha = 1/10, color = "orange", width = 0.45, height = 0.005) +
+  geom_boxplot(alpha = 1/4)
+```
+
+Dando um zoom para ignorar o 99º percentil.
+
+```{r echo=FALSE}
+ggplot(aes(x = factor(quality), y = chlorides),
+       data = subset(df, chlorides < quantile(df$chlorides, probs = .99))) +
+  geom_jitter(alpha = 1/10, color = "orange", width = 0.45, height = 0.005) +
+  geom_boxplot(alpha = 1/10) +
+  stat_summary(fun.y = mean, geom = "point", shape = 4, color = "blue", size = 3)
+```
+
+Agrupando os níveis de qualidade
+
+```{r echo=FALSE}
+ggplot(aes(x = quality.factor, y = chlorides),
+       data = subset(df, chlorides < quantile(df$chlorides, probs = .99))) +
+  geom_jitter(alpha = 1/10, color = "orange", width = 0.45, height = 0.005) +
+  geom_boxplot(alpha = 1/10) +
+  stat_summary(fun.y = mean, geom = "point", shape = 4, color = "blue", size = 3)
+  
+```
+
+Aqui percebo mais um padrão, vinhos com menos sais tendem a possuir qualidade superior.
+
+Pode ser que aqui esteja um dos motivos pelos quais vinhos de densidades mais baixas possuírem qualidade superior. Talvez os avaliadores dos vinhos prefiram vinhos com menos sal. Menos sal significa menos substâncias dissolvidas e, então, menor densidade. Será que o sal é o motivo de vinhos menos densos serem melhor avaliados?
+
+O fato notado até então é que vinhos melhor avaliados possuem menos sal e são menos densos.
+
+#### Quality x Bound Sulfur Dioxide
+
+```{r echo=FALSE}
+ggplot(aes(x = factor(quality), y = bound.sulfur.dioxide),
+       data = df) +
+  geom_jitter(alpha = 1/10, width = 0.475, height = 0) +
+  geom_hline(yintercept = 80, color = "orange")
+```
+
+```{r echo=FALSE}
+ggplot(aes(x = quality.factor, y = bound.sulfur.dioxide),
+       data = df) +
+  geom_jitter(alpha = 1/10, color = "orange", width = 0.475, height = 0) +
+  geom_boxplot(alpha = 1/4) +
+  stat_summary(fun.y = mean, geom = "point", shape = 4, color = "blue", size = 3)
+```
+
+O SO2 presente nos vinhos tem função de conservante e em altas concentrações atribui um odor desagradável característico do enxofre. Portanto, é esperado que vinhos com maiores concentrações de SO2 tenham qualidade inferior. E isso, o plot acima nos confirma.
+
+Nosso dataset demonstra que a concentração de SO2 chega a um ponto ótimo em torno de 80 mg/dm^3.
+
+#### Bound Sulfur Dioxide x Volatile Acidity
+
+```{r echo=FALSE}
+ggplot(aes(x = volatile.acidity, y = bound.sulfur.dioxide),
+       data = subset(df, bound.sulfur.dioxide < quantile(df$bound.sulfur.dioxide, probs = .99) &
+                         volatile.acidity < quantile(df$volatile.acidity, probs = .99))) +
+  geom_jitter(alpha = 1/5, width = 0.01, height = 0) +
+  geom_smooth()
+```
+
+Deve existir um equilíbrio entre bound.sulfur.dioxide (SO2) e volatile.acidity (ácido acético / vinagre).
+Em altas doses o SO2 é prejudicial não apenas ao vinho, que pode ter sua fermentação retardada além do desejado, mas à saúde de quem o bebe. Por outro lado, em baixas concentrações de SO2, o vinho pode se tornar vinagre.
+Por isso, o plot não nos mostra uma correlação linear.
+
+#### Density
+
+##### Density x Residual.Sugar
+
+```{r}
+ggplot(aes(x = residual.sugar, y = density),
+       data = subset(df, density < quantile(df$density, probs = .99) &
+                        residual.sugar < quantile(df$residual.sugar, probs = .99))) +
+  geom_jitter(alpha = 1/4, width = .1, height = .0005)
+```
+
+Há uma correlação linear positiva entre essas variáveis, entretanto há uma nuvem mais densa nas concentrações mais baixas de açúcar, que representa os vinhos secos. Portanto, vou observá-los separadamente.
+
+```{r}
+ggplot(aes(x = residual.sugar, y = density),
+       data = subset(df, density < quantile(df$density, probs = .99) &
+                        sweetness == "Dry")) +
+  geom_jitter(alpha = 1/4, width = .1, height = .0005) +
+  geom_smooth()
+```
+
+Aqui há algo que eu não esperava. Por algum motivo não há uma correlação linear positiva entre a densidade e a concentração de açúcar nos vinhos secos.
+
+##### Density x Bound Sulfur Dioxide
+
+```{r}
+ggplot(aes(x = bound.sulfur.dioxide/1000, y = density),
+       data = subset(df, density < quantile(df$density, probs = .99) &
+                        bound.sulfur.dioxide < quantile(df$bound.sulfur.dioxide, probs = .99))) +
+  geom_jitter(alpha = 1/3, width = 0.005, height = .0005) +
+  geom_smooth()
+```
+
+Aqui nota-se que a densidade aumenta com o aumento do SO2. Será esse um dos grandes motivos que vinhos menos densos possuem, em geral, maior qualidade, visto que SO2 demais traz odores de enxofre?
+
+##### Density x Chlorides
+
+```{r}
+ggplot(aes(x = chlorides, y = density),
+       data = subset(df, density < quantile(df$density, probs = .99) &
+                        chlorides < quantile(df$chlorides, probs = .99))) +
+  geom_jitter(alpha = 1/4, width = 0.005, height = .0005) +
+  geom_smooth()
+```
+
+Gostaria de averiguar se consigo formar clusters nesses plots com densidade adicionando cor atribuída a alguma outra variável.
+
+As variáveis residual.sugar, bound.sulfur.dioxide e chlorides possuem uma correlação relevante com a densidade. 
+
+Ordem crescente de correlação com a densidade: bound.sulfur.dioxide, chlorides, residual.sugar.
+
+### Sumarizando as informações mais relevantes:
+
+O teor alcoólico é, de fato, a variável mais correlacionada à qualidade do vinho.
+A qualidade aumenta conforme o teor alcoólico aumenta.
+
+A densidade diminui conforme o teor alcoólico aumenta.
+
+Vinhos semissecos possuem a média da concentração de açúcar decrescente com o aumento da qualidade.
+Vinhos secos possuem a média da concentração de açúcar crescente com o aumento da qualidade.
+
+O teor alcoólico dos vinhos semissecos mais alcoolizados tende a decair com o aumento da concentração de açúcar.
+Não vejo uma relação entre o álcool e o açúcar em vinhos secos.
+
+A densidade dos vinhos semissecos cresce com o aumento da concentração de açúcar. Esse mesmo padrão NÃO foi observado em vinhos secos.
+
+Vinhos com menos sal costumam possuir qualidade superior.
+
+Ordem crescente de correlação com a densidade: bound.sulfur.dioxide, chlorides, residual.sugar.
+
+### Talk about some of the relationships you observed in this part of the \
+investigation. How did the feature(s) of interest vary with other features in \
+the dataset?
+
+A qualidade dos vinhos está ligada a duas variáveis: Teor alcoólico e Densidade.
+A densidade por sua vez varia de acordo com outros atributos, dos quais pode se destacar:
+fixed.acidity, total.sulfur.dioxide, chlorides, residual.sugar (ordem crescente de correlação)
+
+### Did you observe any interesting relationships between the other features \
+(not the main feature(s) of interest)?
+
+As concentraçções de ácido acético e de SO2 total não estão relacionadas, o que faz total sentido, uma vez que essas concentrações precisam estar em equilíbrio para que o vinho esteja em algum lugar entre os polos: suco de uva e vinagre de uva.
+
+Além disso, foi interessante perceber que há uma correlação entre o álcool e vinhos semissecos mas não há essa correlação ou qualquer outra em vinhos secos.
+
+### What was the strongest relationship you found?
+A relação mais forte foi entre alcohol e density. Trata-se de uma relação inversamente proporcional com score de -0.78
+
+# Plots de Múltiplas Variáveis
+
+Os primeiros plots dessa seção, serão a união dos plots `quality` x `residual.sugar` e `residual.sugar` x `alcohol` da seção anterior. Novamente, separaremos os plots por vinhos secos e semissecos.
+
+Começando pelo plot dos vinhos semissecos.
+```{r echo=FALSE, Multivariate_Plots}
+ggplot(aes(x = residual.sugar, y = alcohol, color = quality.factor),
+       data = subset(df, sweetness == "Off-Dry")) +
+  geom_jitter(height = .1) + 
+  scale_color_brewer(type = "seq", palette = "YlOrRd") +
+  theme_dark()
+```
+
+Aqui noto um certo padrão de quanto mais álcool, maior a qualidade, porém há duas particularidades:
+- Quanto maior a concentração de açúcar nos vinhos semissecos, menor o teto do teor alcoólico e, portanto, menor a qualidade.
+- Existe uma certa quantidade de vinhos de qualidade acima da média com um teor alcoólico bem reduzido.
+
+Agora, para os vinhos secos...
+
+```{r echo=FALSE}
+ggplot(aes(x = residual.sugar, y = alcohol, color = quality.factor),
+       data = subset(df, sweetness == "Dry")) +
+  geom_jitter(height = .1, width = .075) + 
+  scale_color_brewer(type = "seq", palette = "YlOrRd") +
+  theme_dark()
+```
+
+Aqui o padrão geral é claro, quanto mais álcool, maior a qualidade.
+
+Agora vejamos o plot de `alcohol` x `chlorides` x `residual.sugar` por qualidade.
+
+```{r echo=FALSE}
+ggplot(aes(x = chlorides, y = alcohol, color = residual.sugar),
+       data = subset(df, sweetness != "Sweet" &
+                       chlorides < quantile(df$chlorides, probs = .95))) +
+  geom_jitter(height = .1, width = 0) + 
+  scale_color_distiller(type = "seq", palette = "YlOrRd", trans = "reverse") +
+  geom_vline(xintercept = c(0.03, 0.06)) +
+  theme_dark() +
+  facet_grid(~quality.factor)
+```
+
+Noto que quanto mais doce um vinho é, maior a quantidade de sais ele possui e menor o seu teor alcoólico. 
+Portanto, um vinho de qualidade superior costuma ter menos sais, menos açúcar e mais álcool.
+
+Anteriormente, já vimos que vinhos menos densos possuem, em média, qualidade superior e que a concentração de açúcar é a variável mais correlacionada com a densidade. Aqui, quero unir essas informações em um único plot e verificar se há alguma situação estranha.
+
+```{r echo=FALSE}
+ggplot(aes(x = residual.sugar, y = density, color = quality.factor),
+       data = subset(df, sweetness != "Sweet")) +
+  geom_jitter(height = 0, width = .1) +
+  facet_wrap(~sweetness, scales = "free_x") +
+  scale_color_brewer(type = "seq", palette = "YlGnBu") +
+  theme_dark()
+```
+
+Aqui o plot se apresenta conforme esperado. O aumento da concentração de açucar aumentar a densidade. Densidades mais altas estão associadas a vinhos de qualidade inferior.
+
+Uma representação que me causou estranheza na seção anterior foi a de que a uma correlação positiva entre SO2 combinado e densidade. Isso porque, após pesquisar na internet, verifiquei que a densidade de SO2 é relativamente muito mais baixa que a de outros componentes do vinho. Então, na minha cabeça, o que faz sentido é: quanto maior a quantidade de SO2 no vinho, menor a densidade dele.
+
+A fim de entender melhor essa relação entre SO2, analisaremos as variáveis de SO2 com `density` e `residual.sugar`.
+
+```{r echo=FALSE}
+ggplot(aes(x = residual.sugar, y = density, color = bound.sulfur.dioxide),
+       data = subset(df, sweetness != "Sweet" &
+                       bound.sulfur.dioxide < quantile(df$bound.sulfur.dioxide, probs = .99))) +
+  geom_jitter(height = 0, width = .1) +
+  facet_wrap(~sweetness, scales = "free_x") +
+  scale_color_distiller(type = "seq", palette = "RdPu", trans = "reverse") +
+  theme_dark()
+```
+
+```{r echo=FALSE}
+ggplot(aes(x = residual.sugar, y = density, color = free.sulfur.dioxide),
+       data = subset(df, sweetness != "Sweet" &
+                       free.sulfur.dioxide < quantile(df$free.sulfur.dioxide, probs = .99))) +
+  geom_jitter(height = 0, width = .1) +
+  facet_wrap(~sweetness, scales = "free_x") +
+  scale_color_distiller(type = "seq", palette = "RdPu", trans = "reverse") +
+  theme_dark()
+```
+
+Algo muito interessante acontece aqui. Nos plots do SO2 combinado, há um claro padrão que indica que vinhos de densidades maiores possuem mais SO2 combinado. Algo semelhante ocorre na concentração de SO2 livre, entretanto não é está bem definido quanto no combinado.
+
+Agora, vamos dividir os plots por qualidade, e não mais por classificação de doçura.
+
+```{r echo=FALSE}
+ggplot(aes(x = residual.sugar, y = density, color = bound.sulfur.dioxide),
+       data = subset(df, sweetness != "Sweet" &
+                       bound.sulfur.dioxide < quantile(df$bound.sulfur.dioxide, probs = .99))) +
+  geom_jitter(width = .1) +
+  facet_wrap(~quality.factor) +
+  scale_color_distiller(type = "seq", palette = "RdPu", trans = "reverse") +
+  theme_dark()
+```
+
+```{r echo=FALSE}
+ggplot(aes(x = residual.sugar, y = density, color = free.sulfur.dioxide),
+       data = subset(df, sweetness != "Sweet" &
+                       free.sulfur.dioxide < quantile(df$free.sulfur.dioxide, probs = .99))) +
+  geom_jitter(width = .1) +
+  facet_wrap(~quality.factor) +
+  scale_color_distiller(type = "seq", palette = "RdPu", trans = "reverse") +
+  theme_dark()
+```
+
+Como podemos ver, em vinhos de qualidade superior há concentrações menores de SO2 combinado. As concentrações mais baixas de SO2 livre são, em geral, levemente maiores em vinhos de qualidade superior.
+
+Agora desejo ver se há um padrão entre a acidez volátil e o SO2 combinado com a qualidade do vinho.
+
+```{r echo=FALSE}
+ggplot(aes(x = volatile.acidity, y = bound.sulfur.dioxide, color = quality.factor),
+       data = subset(df, bound.sulfur.dioxide < quantile(df$bound.sulfur.dioxide, probs = .99) &
+                         volatile.acidity < quantile(df$volatile.acidity, probs = .99))) +
+  geom_jitter(width = 0.01, height = 0) +
+  scale_color_brewer(type = "div", palette = "Spectral", direction = -1) +
+  theme_dark()
+```
+
+Apesar de observar certos moldes, não é possível enxergar padrões bem definidos nesse plot.
+
+Talvez se eu separar esses vinhos por densidade, algum padrão pode ficar evidenciado.
+
+```{r echo=FALSE}
+df$density.factor <- with(df, cut(density, include.lowest = TRUE, right = FALSE,
+                                  c(0.9871, 0.9917, 0.9937, 0.9961, 1.0390)))
+
+ggplot(aes(x = volatile.acidity, y = bound.sulfur.dioxide, color = quality.factor),
+       data = subset(df, bound.sulfur.dioxide < quantile(df$bound.sulfur.dioxide, probs = .99) &
+                         volatile.acidity < quantile(df$volatile.acidity, probs = .99))) +
+  geom_jitter(width = 0.01, height = 0) +
+  scale_color_brewer(type = "div", palette = "Spectral", direction = -1) +
+  theme_dark() +
+  facet_grid(rows = vars(density.factor))
+```
+
+```{r echo=FALSE}
+ggplot(aes(x = volatile.acidity, y = bound.sulfur.dioxide, color = quality.factor),
+       data = subset(df, bound.sulfur.dioxide < quantile(df$bound.sulfur.dioxide, probs = .99) &
+                         volatile.acidity < quantile(df$volatile.acidity, probs = .99))) +
+  geom_jitter(width = 0.01, height = 0) +
+  scale_color_brewer(type = "div", palette = "Spectral", direction = -1) +
+  theme_dark() +
+  facet_grid(cols = vars(density.factor))
+```
+
+Apesar das massas de mesma cor estarem melhor segregadas, ainda não consigo tirar muito proveito desses plots, me parece que o que separa esses vinhos de qualidade superior e inferior é sua densidade.
+
+# Multivariate Analysis
+
+### Talk about some of the relationships you observed in this part of the \
+investigation. Were there features that strengthened each other in terms of \
+looking at your feature(s) of interest?
+
+Talvez variáveis importantes que foram omitidas do dataset fossem fortemente necessárias para o melhor entendimento do que interfere na qualidade do vinho. O que eu concluo até então é que a densidade, o teor alcoólico e a concentração de cloretos são os maiores atributos correlacionados à variável de interesse.
+
+Um plot que deixou a força da relação densidade x qualidade muito evidenciada foi o de densidade x açúcar x qualidade.
+
+### Were there any interesting or surprising interactions between features?
+
+Um dos fatos curiosos que vi nessa seção foi no plot de açúcar x álcool x qualidade onde uma parcela de vinhos de qualidade acima da média se encontra numa parte do plot em que não se espera esse tipo de vinho. Nesse mesmo plot fica clara a relevância do álcool na qualidade do vinho.
+
+Outra curiosidade foi o da correlação negativa entre álcool e cloretos. Por que esses atributos tem essa forte correlação? Vinhos com menos concentração de clorestos tem uma faixa de teor alcoólico mais elevada.
+
+As taxas de SO2 livre do vinho não são as menores em vinhos de qualidade superior. Na verdade, o que diminui é o intervalo da concentração desse gás, que se aproxima de valores medianos.
+
+------
+
+# Final Plots and Summary
+
+> **Tip**: You've done a lot of exploration and have built up an understanding
+of the structure of and relationships between the variables in your dataset.
+Here, you will select three plots from all of your previous exploration to
+present here as a summary of some of your most interesting findings. Make sure
+that you have refined your selected plots for good titling, axis labels (with
+units), and good aesthetic choices (e.g. color, transparency). After each plot,
+make sure you justify why you chose each plot by describing what it shows.
+
+### Plot #1
+```{r echo=FALSE, Plot_One}
+ggplot(aes(x = quality),
+       data = df) + 
+  geom_histogram(binwidth = .5) +
+  scale_x_continuous(breaks = seq(3, 9, 1)) +
+  ggtitle("Quantidade de Vinhos por Qualidade") +
+  xlab("Qualidade") +
+  ylab("Quantidade")
+```
+
+#### Descrição
+O motivo desse plot ter sido escolhido como o primeiro é que ele evidencia que nossas classes não estão em equilíbrio, ou seja, não há a mesma quantidade de vinhos para cada qualidade. Como nosso futuro modelo precisa predizer qualquer nível de qualidade, é importante que se equilibre o número de classes no nosso dataset.
+
+### Plot #2
+```{r echo=FALSE, Plot_Two}
+ggplot(aes(x = residual.sugar),
+       data = df) +
+  geom_histogram(bins = 40) +
+  geom_vline(xintercept = c(4, 25), color = "orange") +
+  scale_x_log10() +
+  ggtitle("Quantidade de Vinhos por Concentração de Açúcar") +
+  xlab("Concentração de Açúcar  (g/L)") +
+  ylab("Quantidade")
+```
+
+#### Descrição
+Esse plot foi o segundo escolhido pois ele nos traz o insight de que há vinhos de classificações diferentes quanto ao açúcar. E que classes diferentes de vinho podem ter critérios diferentes para a nivelação da qualidade.
+Note a importância de transformar logaritmicamente o eixo da concentração de açúcar. Se não fosse esse detalhe, teríamos um plot altamente enviesado à direita que poderia não nos trazer insights como esse.
+As linhas verticais em laranja, representam os valores de concentração de açúcar limiares na classificação do vinho em seco, semisseco e doce, respectivamente.
+
+### Plot #3
+```{r echo=FALSE, Plot_Three}
+ggplot(aes(x = factor(quality), y = density),
+       data = subset(df, density < quantile(df$density, probs = .99))) +
+  geom_jitter(color = "orange", alpha = .3) +
+  geom_boxplot(alpha = .3) +
+  ggtitle("Densidade dos Vinhos por Qualidade") +
+  xlab("Qualidade") +
+  ylab("Densidade   (g/cm^3)")
+```
+
+#### Descrição
+
+O motivo dessa escolha foi a clara importância da densidade do vinho para a qualidade dele. É interessante notar que a variação da densidade é mínima e que, portanto, a mínima variação de qualquer soluto pode tornar um vinho de qualidade acima da média em um vinho de baixa qualidade, ou vice-versa.
+
+Apesar do álcool ser ainda mais correlacionado com a qualidade, preferi escolher a densidade pois ela é consequência de vários outros atributos, inclusive do próprio álcool.
+
+------
+
+# Reflection
+
+Na seção de plots de única variável os histogramas tomaram conta. Foi possível verificar o balanço dos valores, a distruição dos atributos e seus intervalos. Procurei usar o facet na variável qualidade para já obter informações que seriam melhor exploradas na seção posterior.
+
+Na seção de plots de duas variáveis o palco foi dos scatterplots. Iniciei a seção com uma matriz de scatterplots e correlações. Essa matriz guiou minhas escolhas de plots durante toda a seção. Preferi reproduzir e analisar de melhor as variáveis que se relacionavam mais fortemente, de acordo com a matriz de scatterplots, e sinto que foi nesta seção onde obtive mais sucesso no sentido de obter informações relevantes sobre correlações de variáveis. Aqui, confirmei algumas suspeitas oriundas da primeira seção.
+
+A terceira seção, de múltiplas variáveis, foi, de certo, a mais difícil para mim. Utilizei scatterplots com cores. A maior questão foi entender como um atributo do vinho poderia se relacionar com outra, os arranjos são inúmeros, portanto, qual escolher para fazer parte de um scatterplot já compostos por duas variáveis?
+
+Como não sou um bom entendedor (muito menos um bom degustador) de vinhos, fiz pesquisas para entender como as substâncias se relacionam para criar um vinho perfeito. A partir daí, gostaria de tentar plotar variáveis que, apesar de não possuírem correlação linear, poderiam ter algum outro padrão. Foi o que tentei fazer com a acidez volátil e o SO2. Infelizmente, não tive muito sucesso em identificar padrões com elas.
